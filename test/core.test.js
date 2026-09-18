@@ -638,7 +638,7 @@ test('no source file contains a literal non-ASCII character', async () => {
       if (SKIP.has(entry.name)) continue
       const path = join(dir, entry.name)
       if (entry.isDirectory()) out.push(...(await walk(path)))
-      else if (/\.(js|html|css|json|webmanifest|toml|yaml)$/.test(entry.name)) out.push(path)
+      else if (/\.(js|html|css|json|webmanifest|toml|ya?ml)$/.test(entry.name)) out.push(path)
     }
     return out
   }
