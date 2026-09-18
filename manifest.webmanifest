@@ -1,0 +1,14 @@
+{
+  "name": "Textcleaner",
+  "short_name": "Textcleaner",
+  "description": "Clean and reformat text from PDFs, Word, InDesign, email and web pages. Runs entirely in your browser.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0e1116",
+  "theme_color": "#0e1116",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

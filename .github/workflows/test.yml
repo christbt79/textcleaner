@@ -1,0 +1,26 @@
+# The test suite has no dependencies, so there is nothing to install and no
+# lockfile to restore: checkout, a Node runtime, and the same command a
+# contributor runs locally.
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: node --test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm test
