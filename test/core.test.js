@@ -313,6 +313,13 @@ test('space before punctuation is removed', () => {
   assert.equal(space.fixSpaceBeforePunctuation('Hello , world . Yes ?'), 'Hello, world. Yes?')
 })
 
+test('a space before a spelled-out ellipsis is left alone', () => {
+  assert.equal(
+    space.fixSpaceBeforePunctuation('the work went on ... and on .'),
+    'the work went on ... and on.',
+  )
+})
+
 test('missing space after a full stop is added', () => {
   assert.equal(space.fixSpaceAfterPunctuation('One.Two.Three'), 'One. Two. Three')
 })
@@ -623,17 +630,22 @@ test('no source file contains a literal non-ASCII character', async () => {
   const { readdir, readFile } = await import('node:fs/promises')
   const { join } = await import('node:path')
 
+  const SKIP = new Set(['node_modules', '.git', 'assets'])
+
   async function walk(dir) {
     const out = []
     for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (SKIP.has(entry.name)) continue
       const path = join(dir, entry.name)
       if (entry.isDirectory()) out.push(...(await walk(path)))
-      else if (/\.(js|html|css|json|webmanifest)$/.test(entry.name)) out.push(path)
+      else if (/\.(js|html|css|json|webmanifest|toml|yaml)$/.test(entry.name)) out.push(path)
     }
     return out
   }
 
-  for (const path of [...(await walk('src')), ...(await walk('test'))]) {
+  // The whole repository, not only `src`: the deployed page and its stylesheet
+  // have to survive the same journeys as the text this tool cleans.
+  for (const path of await walk('.')) {
     const content = await readFile(path, 'utf8')
     const offenders = [...content].filter((c) => {
       const cp = c.codePointAt(0)

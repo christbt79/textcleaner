@@ -45,10 +45,15 @@ export function trimDocument(text) {
   return text.trim()
 }
 
-/** Deletes the stray space that sits before punctuation. */
+/**
+ * Deletes the stray space that sits before punctuation.
+ *
+ * A single full stop only: a space before a spelled-out ellipsis is a
+ * legitimate style choice, and eating it would be an edit, not a repair.
+ */
 export function fixSpaceBeforePunctuation(text) {
   return text
-    .replace(/[^\S\n]+([,.;:!?%\]})])/g, '$1')
+    .replace(/[^\S\n]+([,;:!?%\]})]|\.(?!\.))/g, '$1')
     .replace(/([([{])[^\S\n]+/g, '$1')
 }
 
