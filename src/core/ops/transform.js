@@ -33,7 +33,9 @@ export function findReplace(text, options = {}) {
   const re = buildSearchRegex(options)
   if (!re) return text
   const replacement = (options.replace ?? '').replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-  return text.replace(re, replacement)
+  // Outside regex mode a replacement is literal: "$5" means five dollars, not
+  // a capture group, so it goes through a function to escape the $ syntax.
+  return text.replace(re, options.regex ? replacement : () => replacement)
 }
 
 /** Counts matches without changing anything, for the live match counter. */
@@ -41,11 +43,12 @@ export function countMatches(text, options = {}) {
   const re = buildSearchRegex({ ...options, global: true })
   if (!re) return 0
   let count = 0
-  let guard = 0
-  re.lastIndex = 0
-  while (re.exec(text) !== null) {
+  let match
+  while ((match = re.exec(text)) !== null) {
     count += 1
-    if (re.lastIndex === 0 || guard++ > 1e6) break
+    // An empty match does not move lastIndex, so step past it by hand.
+    if (match[0] === '') re.lastIndex += 1
+    if (count >= 1e6) break
   }
   return count
 }

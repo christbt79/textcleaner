@@ -7,7 +7,7 @@
  * next visit.
  */
 
-const CACHE = 'textcleaner-v1'
+const CACHE = 'textcleaner-v2'
 
 const SHELL = [
   './',
@@ -17,8 +17,8 @@ const SHELL = [
   'assets/icon.svg',
   'src/main.js',
   'src/core/chars.js',
+  'src/core/cleaner.js',
   'src/core/pipeline.js',
-  'src/core/presets.js',
   'src/core/scan.js',
   'src/core/stats.js',
   'src/core/ops/repair.js',
@@ -28,11 +28,7 @@ const SHELL = [
   'src/core/ops/casing.js',
   'src/core/ops/transform.js',
   'src/ui/dom.js',
-  'src/ui/state.js',
-  'src/ui/controls.js',
-  'src/ui/issues.js',
-  'src/ui/output.js',
-  'src/ui/palette.js',
+  'src/ui/reveal.js',
   'src/ui/sample.js',
 ]
 

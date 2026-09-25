@@ -8,7 +8,6 @@ import * as casing from '../src/core/ops/casing.js'
 import * as space from '../src/core/ops/whitespace.js'
 import * as transform from '../src/core/ops/transform.js'
 import { runPipeline, OPERATIONS, defaultParams, conflictsWith } from '../src/core/pipeline.js'
-import { PRESETS, PRESETS_BY_ID } from '../src/core/presets.js'
 import { scanText, inspectCharacters } from '../src/core/scan.js'
 import { computeStats } from '../src/core/stats.js'
 import {
@@ -357,7 +356,8 @@ test('whole word matching does not match inside words', () => {
 
 test('match counting is accurate and terminates on empty matches', () => {
   assert.equal(transform.countMatches('a a a', { find: 'a' }), 3)
-  assert.ok(transform.countMatches('aaa', { find: 'x*', regex: true }) >= 0)
+  // An empty match at every position, including the end: four, not a hang.
+  assert.equal(transform.countMatches('aaa', { find: 'x*', regex: true }), 4)
 })
 
 test('tracking parameters are stripped but real ones survive', () => {
@@ -431,102 +431,6 @@ test('mutually exclusive operations are reported as conflicts', () => {
   assert.ok(conflictsWith('straightenQuotes').includes('curlQuotes'))
   assert.ok(conflictsWith('unwrapParagraphs').includes('removeAllLineBreaks'))
   assert.deepEqual(conflictsWith('collapseSpaces'), [])
-})
-
-// --- Presets --------------------------------------------------------------
-
-test('every preset names only real operations', () => {
-  const ids = new Set(OPERATIONS.map((op) => op.id))
-  for (const preset of PRESETS) {
-    for (const id of preset.enabled) {
-      assert.ok(ids.has(id), preset.id + ' refers to unknown operation ' + id)
-    }
-    for (const id of Object.keys(preset.params ?? {})) {
-      assert.ok(ids.has(id), preset.id + ' sets params for unknown operation ' + id)
-    }
-  }
-})
-
-test('the safe paste preset makes a messy paste safe to re-paste', () => {
-  const messy = 'The' + NBSP + 'quick ' + LDQUO + 'brown' + RDQUO + ' fox ' + EM_DASH +
-    ' it' + RSQUO + 's ' + FI + 'ne' + ZWSP + '.  \nTrailing   \n\n\n\nNext'
-  const preset = PRESETS_BY_ID.get('safePaste')
-  const { text, errors } = runPipeline(messy, { enabled: preset.enabled, params: preset.params })
-
-  assert.deepEqual(errors, [])
-  assert.match(text, /^[\n\t -~]*$/, 'only printable ASCII should remain: ' + JSON.stringify(text))
-  assert.ok(text.includes('"brown"'))
-  assert.ok(text.includes("it's fine"))
-  assert.ok(!/[^\S\n]$/m.test(text), 'no trailing whitespace')
-  assert.ok(!text.includes('\n\n\n'))
-})
-
-test('the PDF preset reflows a realistic PDF paste', () => {
-  const pdfPaste = [
-    'Annual Report 2024',
-    'The organisation delivered a strong performance across all of its',
-    'operating divisions during the year, with revenue growth of eleven',
-    'per cent and an improved margin.',
-    '',
-    '12',
-    'Annual Report 2024',
-    'Looking ahead, the board expects conditions to remain compet-',
-    'itive, but is confident in the strategy.',
-    'Annual Report 2024',
-  ].join('\n')
-
-  const preset = PRESETS_BY_ID.get('fromPdf')
-  const { text } = runPipeline(pdfPaste, { enabled: preset.enabled, params: preset.params })
-
-  assert.ok(!text.includes('Annual Report 2024'), 'running head removed')
-  assert.ok(!text.split('\n').includes('12'), 'page number removed')
-  assert.ok(text.includes('competitive'), 'hyphenated word rejoined')
-  assert.ok(text.includes('all of its operating divisions'), 'wrapped lines rejoined')
-})
-
-test('the email preset removes reply markers and rewraps', () => {
-  const email = [
-    '> On Monday, someone wrote:',
-    '> The meeting has been moved to Thursday at two, which should',
-    '> suit everyone who asked about the original time.',
-  ].join('\n')
-  const preset = PRESETS_BY_ID.get('fromEmail')
-  const { text } = runPipeline(email, { enabled: preset.enabled, params: preset.params })
-  assert.ok(!text.includes('>'))
-  assert.ok(text.includes('Thursday at two, which should suit everyone'))
-})
-
-test('the one-line preset collapses everything to a single line', () => {
-  const preset = PRESETS_BY_ID.get('oneLine')
-  const { text } = runPipeline('one\ntwo\n\nthree', { enabled: preset.enabled, params: preset.params })
-  assert.equal(text, 'one two three')
-})
-
-test('the minimal preset changes nothing except invisible characters', () => {
-  const preset = PRESETS_BY_ID.get('minimal')
-  const input = 'Keep  the  "spacing"   and the ' + EM_DASH + ' dash.' + ZWSP + '   \nSecond line.'
-  const { text } = runPipeline(input, { enabled: preset.enabled, params: preset.params })
-  assert.equal(text, 'Keep  the  "spacing"   and the ' + EM_DASH + ' dash.\nSecond line.')
-})
-
-test('cleaning is idempotent: running it twice changes nothing more', () => {
-  const messy = '<p>Caf' + E_ACUTE + NBSP + ' ' + LDQUO + 'test' + RDQUO + ' ' + EM_DASH +
-    ' ' + FI + 'ne</p>\n\n\n> quoted\n- one\n1. two'
-  for (const preset of PRESETS) {
-    const once = runPipeline(messy, { enabled: preset.enabled, params: preset.params }).text
-    const twice = runPipeline(once, { enabled: preset.enabled, params: preset.params }).text
-    assert.equal(twice, once, preset.id + ' is not idempotent')
-  }
-})
-
-test('no preset ever throws on any of a range of awkward inputs', () => {
-  const samples = ['', '\n', '   ', BULLET + ' item', '<p>x</p>', '> q', 'a'.repeat(500)]
-  for (const preset of PRESETS) {
-    for (const sample of samples) {
-      const { errors } = runPipeline(sample, { enabled: preset.enabled, params: preset.params })
-      assert.deepEqual(errors, [], preset.id + ' failed on ' + JSON.stringify(sample))
-    }
-  }
 })
 
 // --- Scanner --------------------------------------------------------------
