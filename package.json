@@ -1,0 +1,12 @@
+{
+  "name": "textcleaner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An all-in-one text cleaning and formatting tool that runs entirely in the browser.",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "dev": "python3 -m http.server 8080",
+    "start": "python3 -m http.server 8080"
+  }
+}
