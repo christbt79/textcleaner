@@ -1,4 +1,4 @@
-# Textcleaner
+# Format My Text
 
 An all-in-one text cleaner and formatter. Paste something that came out of a
 PDF, Word, InDesign, an email or a web page, and get text that behaves when you
@@ -80,6 +80,8 @@ Any static server works, and opening `index.html` through a server (rather than
 `file://`) is needed because the app is ES modules.
 
 ## Deploying
+
+The live site is **https://formatmytext.netlify.app**.
 
 **Netlify.** Connect the repository. `netlify.toml` sets the publish directory
 to the repository root, an empty build command and the security headers. Or

@@ -3,12 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Textcleaner</title>
+<title>Format My Text</title>
 <meta name="description" content="Paste text from a PDF, Word, InDesign, an email or a web page and get clean plain text back. Runs entirely in your browser.">
 <meta name="color-scheme" content="light dark">
+<meta name="application-name" content="Format My Text">
+<meta name="apple-mobile-web-app-title" content="Format My Text">
 <meta name="theme-color" content="#f4f6f9">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="styles/app.css">
 </head>
@@ -16,10 +18,8 @@
 
 <header class="topbar">
   <div class="brand">
-    <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M4 5h16M4 10h11M4 15h16M4 20h8" />
-    </svg>
-    <span class="brand-name">Textcleaner</span>
+    <img class="brand-mark" src="assets/icon.svg" alt="" width="24" height="24">
+    <span class="brand-name">Format My Text</span>
   </div>
   <div class="topbar-actions">
     <button type="button" class="icon-button" id="theme-button" title="Switch to dark mode" aria-label="Switch to dark mode">
@@ -88,50 +88,50 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<dialog class="dialog about" id="about">
-  <h2>How Textcleaner works</h2>
-  <p>
-    Paste text and it is cleaned straight away. Then copy it and paste it
-    anywhere. That is the whole job.
-  </p>
+<dialog class="dialog about" id="about" aria-labelledby="about-title">
+  <div class="dialog-head">
+    <h2 id="about-title">How Format My Text works</h2>
+    <button type="button" class="icon-button" id="about-x" title="Close" aria-label="Close" autofocus>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <p>Paste text and it is cleaned straight away. Copy it and paste it anywhere. That is the whole job.</p>
 
-  <h3>Always fixed</h3>
-  <p>
-    Invisible characters, non-breaking spaces, garbled characters such as
-    an apostrophe that arrives as three strange symbols, joined-up letters from
-    PDFs, curly quotes, double spaces, stray spaces at line ends and extra
-    blank lines. The line under the box says exactly what was fixed, and
-    <strong>Show original</strong> highlights where each one was.
-  </p>
+  <div class="about-columns">
+    <section>
+      <h3>Always fixed</h3>
+      <p>
+        Garbled and invisible characters, non-breaking spaces, joined-up letters
+        from PDFs, curly quotes, long dashes, double spaces and extra blank lines.
+        The line under the box says what was fixed, and <strong>Show original</strong>
+        highlights where.
+      </p>
 
-  <h3>Your choice</h3>
-  <ul>
-    <li><strong>Join broken lines</strong>: for PDFs and emails, where lines break mid-sentence. Also removes page numbers, repeated headers and &gt; reply markers.</li>
-    <li><strong>Remove bullets and numbering</strong> from the start of lines.</li>
-    <li><strong>Keep curly quotes</strong> and dashes, for InDesign or Word.</li>
-    <li><strong>One line</strong>: everything on a single line, for a form field or spreadsheet cell.</li>
-  </ul>
-  <p>If the app spots something one of these would fix, it suggests it.</p>
+      <h3>Your choice</h3>
+      <ul>
+        <li><strong>Join broken lines</strong> for PDFs and emails. Also removes page numbers, repeated headers and &gt; reply markers.</li>
+        <li><strong>Remove bullets and numbering</strong> from the start of lines.</li>
+        <li><strong>Keep curly quotes</strong> and dashes, for InDesign or Word.</li>
+        <li><strong>One line</strong> for a form field or a spreadsheet cell.</li>
+      </ul>
+    </section>
 
-  <h3>More tools</h3>
-  <p>
-    Change case, sort lines, remove duplicates, find and replace, strip HTML
-    and reduce to plain ASCII. Each applies once, and Undo takes it back.
-  </p>
+    <section>
+      <h3>More tools</h3>
+      <p>Change case, sort, remove duplicates, find and replace, strip HTML, plain ASCII. Undo takes any of them back.</p>
 
-  <h3>Your text stays here</h3>
-  <p>
-    Everything runs in this browser tab. There is no server, no account and
-    no tracking, and the page works with no connection at all.
-  </p>
+      <h3>Private</h3>
+      <p>Everything runs in this browser tab: no server, no account, no tracking. It works offline too.</p>
 
-  <h3>Shortcuts</h3>
-  <dl class="shortcuts">
-    <dt>Ctrl / Cmd + V</dt><dd>Paste anywhere on the page</dd>
-    <dt>Ctrl / Cmd + Enter</dt><dd>Copy the clean text</dd>
-    <dt>Ctrl / Cmd + Z</dt><dd>Undo</dd>
-    <dt>Escape</dt><dd>Close a menu or go back to the clean text</dd>
-  </dl>
+      <h3>Shortcuts</h3>
+      <dl class="shortcuts">
+        <dt>Ctrl / Cmd + V</dt><dd>Paste anywhere on the page</dd>
+        <dt>Ctrl / Cmd + Enter</dt><dd>Copy the clean text</dd>
+        <dt>Ctrl / Cmd + Z</dt><dd>Undo</dd>
+        <dt>Escape</dt><dd>Close a menu or go back to the clean text</dd>
+      </dl>
+    </section>
+  </div>
 
   <div class="dialog-actions"><button type="button" class="tool-button primary" id="about-close">Close</button></div>
 </dialog>
