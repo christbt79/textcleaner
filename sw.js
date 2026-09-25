@@ -7,7 +7,7 @@
  * next visit.
  */
 
-const CACHE = 'textcleaner-v2'
+const CACHE = 'formatmytext-v1'
 
 const SHELL = [
   './',
@@ -15,6 +15,8 @@ const SHELL = [
   'styles/app.css',
   'manifest.webmanifest',
   'assets/icon.svg',
+  'assets/icon-192.png',
+  'assets/apple-touch-icon.png',
   'src/main.js',
   'src/core/chars.js',
   'src/core/cleaner.js',

@@ -1,7 +1,7 @@
 # Render: a static site served straight from the repository root.
 services:
   - type: web
-    name: textcleaner
+    name: formatmytext
     runtime: static
     buildCommand: ""
     staticPublishPath: .

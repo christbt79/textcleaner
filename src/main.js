@@ -18,8 +18,8 @@ import { $, el, replaceChildren, debounce, isCommandKey } from './ui/dom.js'
 import { renderMarked } from './ui/reveal.js'
 import { SAMPLE_TEXT } from './ui/sample.js'
 
-const OPTIONS_KEY = 'textcleaner.options.v2'
-const THEME_KEY = 'textcleaner.theme.v2'
+const OPTIONS_KEY = 'formatmytext.options.v1'
+const THEME_KEY = 'formatmytext.theme.v1'
 const HISTORY_LIMIT = 50
 const MAX_FILE_BYTES = 12 * 1024 * 1024
 const THEMES = ['light', 'dark']
@@ -474,6 +474,14 @@ function toggleTheme() {
   writeStorage(THEME_KEY, theme)
 }
 
+// --- About ----------------------------------------------------------------
+
+/** Opens the help window at the top, whatever it was scrolled to last time. */
+function openAbout() {
+  dom.about.showModal()
+  dom.about.scrollTop = 0
+}
+
 // --- Events ---------------------------------------------------------------
 
 /**
@@ -526,8 +534,17 @@ dom.clearButton.addEventListener('click', clearText)
 $('example-button').addEventListener('click', () =>
   load(SAMPLE_TEXT, { message: 'Loaded an example with a bit of everything wrong with it' }))
 $('theme-button').addEventListener('click', toggleTheme)
-$('about-button').addEventListener('click', () => dom.about.showModal())
+$('about-button').addEventListener('click', openAbout)
 $('about-close').addEventListener('click', () => dom.about.close())
+$('about-x').addEventListener('click', () => dom.about.close())
+// A click on the dimmed area outside the window closes it too.
+dom.about.addEventListener('click', (event) => {
+  if (event.target !== dom.about) return
+  const box = dom.about.getBoundingClientRect()
+  const inside = event.clientX >= box.left && event.clientX <= box.right &&
+    event.clientY >= box.top && event.clientY <= box.bottom
+  if (!inside) dom.about.close()
+})
 
 dom.toolsButton.addEventListener('click', () => {
   if (dom.toolsPanel.hidden) openToolsPanel()
