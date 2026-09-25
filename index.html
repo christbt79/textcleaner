@@ -1,20 +1,18 @@
 <!doctype html>
-<html lang="en" data-theme="auto">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Textcleaner</title>
-<meta name="description" content="Clean and reformat text that came from a PDF, Word, InDesign, email or a web page. Runs entirely in your browser.">
-<meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#0e1116">
+<meta name="description" content="Paste text from a PDF, Word, InDesign, an email or a web page and get clean plain text back. Runs entirely in your browser.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f6f9">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="styles/app.css">
 </head>
 <body>
-
-<a class="skip-link" href="#input">Skip to the text box</a>
 
 <header class="topbar">
   <div class="brand">
@@ -23,141 +21,120 @@
     </svg>
     <span class="brand-name">Textcleaner</span>
   </div>
-
-  <div class="preset-bar" role="group" aria-label="Presets">
-    <span class="preset-label">Source</span>
-    <div class="preset-chips" id="preset-chips"></div>
-  </div>
-
   <div class="topbar-actions">
-    <button type="button" class="icon-button" id="palette-button" title="Search operations" aria-label="Search operations">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-    </button>
-    <button type="button" class="icon-button" id="theme-button" title="Switch theme" aria-label="Switch theme">
+    <button type="button" class="icon-button" id="theme-button" title="Switch to dark mode" aria-label="Switch to dark mode">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></svg>
     </button>
-    <button type="button" class="icon-button" id="about-button" title="About this tool" aria-label="About this tool">
+    <button type="button" class="icon-button" id="about-button" title="How it works" aria-label="How it works">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/></svg>
     </button>
   </div>
 </header>
 
-<div class="issue-bar" id="issue-bar" hidden>
-  <div class="issue-bar-head">
-    <span class="issue-bar-title" id="issue-bar-title">Found in this text</span>
-    <button type="button" class="link-button" id="fix-all">Fix everything</button>
+<main class="app">
+
+  <div class="box" id="box">
+    <textarea id="text" aria-label="Text to clean" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"></textarea>
+    <div class="original" id="original" tabindex="0" aria-label="Your original paste" hidden></div>
+    <div class="empty-state" id="empty-state">
+      <p class="empty-title">Paste anything here</p>
+      <p class="empty-note">It's cleaned the moment you paste. Nothing leaves your browser.</p>
+      <button type="button" class="link-button" id="example-button">Try an example</button>
+    </div>
+    <div class="drop-hint">Drop a text file to load it</div>
+    <dl class="stats" id="counts" aria-label="Counts for the clean text" hidden></dl>
   </div>
-  <div class="issue-chips" id="issue-chips"></div>
-</div>
 
-<main class="workspace" id="workspace">
-
-  <aside class="rail" id="rail" aria-label="Operations">
-    <div class="rail-head">
-      <label class="rail-search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input type="search" id="rail-filter" placeholder="Filter operations" aria-label="Filter operations" autocomplete="off">
-      </label>
-      <button type="button" class="link-button" id="reset-operations">Reset</button>
-    </div>
-    <div class="rail-groups" id="rail-groups"></div>
-    <div class="rail-foot">
-      <span id="active-count">0 active</span>
-      <button type="button" class="link-button" id="copy-recipe">Copy recipe link</button>
-    </div>
-  </aside>
-
-  <section class="panes" id="panes" data-view="split">
-
-    <div class="pane" id="pane-input">
-      <header class="pane-head">
-        <h2 class="pane-title">Paste here</h2>
-        <div class="pane-tools">
-          <button type="button" class="tool-button" id="use-html" hidden title="The clipboard also held rich text; load its HTML instead so lists and links survive">Use rich source</button>
-          <button type="button" class="tool-button" id="paste-button">Paste</button>
-          <button type="button" class="tool-button" id="sample-button">Sample</button>
-          <button type="button" class="tool-button" id="clear-button">Clear</button>
-        </div>
-      </header>
-      <div class="pane-body">
-        <textarea id="input" spellcheck="false" autocapitalize="off" autocorrect="off"
-          placeholder="Paste text from a PDF, Word, InDesign, an email or a web page.&#10;&#10;Nothing is uploaded: every operation runs in this browser tab."></textarea>
-        <div class="drop-hint" id="drop-hint">Drop a text file to load it</div>
-      </div>
-      <footer class="pane-foot" id="input-stats"></footer>
-    </div>
-
-    <div class="pane" id="pane-output">
-      <header class="pane-head">
-        <h2 class="pane-title">Clean text</h2>
-        <div class="pane-tools">
-          <label class="switch">
-            <input type="checkbox" id="reveal-toggle">
-            <span>Reveal hidden</span>
-          </label>
-          <button type="button" class="tool-button" id="reuse-button" title="Send the output back to the input">Reuse</button>
-          <button type="button" class="tool-button" id="download-button">Save</button>
-          <button type="button" class="tool-button primary" id="copy-button">Copy</button>
-        </div>
-      </header>
-      <div class="pane-body">
-        <pre id="output" class="output" tabindex="0" aria-live="polite" aria-atomic="false"></pre>
-        <p class="output-empty" id="output-empty">The cleaned text will appear here.</p>
-      </div>
-      <footer class="pane-foot" id="output-stats"></footer>
-    </div>
-
+  <section class="report" id="report" aria-live="polite" hidden>
+    <p class="summary" id="summary">
+      <svg class="summary-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      <span id="summary-text"></span>
+      <button type="button" class="link-button" id="original-button">Show original</button>
+    </p>
+    <div class="suggestions" id="suggestions"></div>
   </section>
-</main>
 
-<nav class="pane-switch" id="pane-switch" aria-label="Show pane">
-  <button type="button" data-view="input" class="is-active">Paste</button>
-  <button type="button" data-view="output">Clean</button>
-  <button type="button" data-view="rail">Operations</button>
-</nav>
+  <div class="replace-bar" id="replace-bar" role="search" hidden>
+    <input type="text" id="find-input" placeholder="Find" aria-label="Find" autocomplete="off" spellcheck="false">
+    <input type="text" id="replace-input" placeholder="Replace with" aria-label="Replace with" autocomplete="off" spellcheck="false">
+    <label class="check"><input type="checkbox" id="match-case"> Match case</label>
+    <label class="check"><input type="checkbox" id="use-regex"> Regex</label>
+    <span class="match-count" id="match-count"></span>
+    <button type="button" class="tool-button" id="replace-all">Replace all</button>
+    <button type="button" class="icon-button" id="replace-close" title="Close" aria-label="Close find and replace">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <section class="options" aria-label="Options">
+    <span class="options-label">Also</span>
+    <div class="switches" id="switches"></div>
+  </section>
+
+  <section class="actions">
+    <div class="tools">
+      <button type="button" class="tool-button" id="tools-button" aria-expanded="false" aria-controls="tools-panel">
+        More tools
+        <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+      <div class="tools-panel" id="tools-panel" hidden></div>
+    </div>
+    <button type="button" class="tool-button" id="undo-button" disabled>Undo</button>
+    <button type="button" class="tool-button" id="clear-button" disabled>Clear</button>
+    <button type="button" class="tool-button primary" id="copy-button" disabled>Copy clean text</button>
+  </section>
+
+</main>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<dialog class="dialog palette" id="palette">
-  <label class="palette-search">
-    <input type="search" id="palette-input" placeholder="Search presets and operations" aria-label="Search presets and operations" autocomplete="off">
-  </label>
-  <ul class="palette-results" id="palette-results" role="listbox"></ul>
-  <p class="palette-hint">Enter to toggle &middot; Escape to close</p>
-</dialog>
-
 <dialog class="dialog about" id="about">
-  <h2>Textcleaner</h2>
+  <h2>How Textcleaner works</h2>
   <p>
-    An all-in-one text cleaner and formatter. Paste something that came from a
-    PDF, Word, InDesign, an email or a web page, and get text that behaves
-    when you paste it somewhere else.
+    Paste text and it is cleaned straight away. Then copy it and paste it
+    anywhere. That is the whole job.
   </p>
+
+  <h3>Always fixed</h3>
+  <p>
+    Invisible characters, non-breaking spaces, garbled characters such as
+    an apostrophe that arrives as three strange symbols, joined-up letters from
+    PDFs, curly quotes, double spaces, stray spaces at line ends and extra
+    blank lines. The line under the box says exactly what was fixed, and
+    <strong>Show original</strong> highlights where each one was.
+  </p>
+
+  <h3>Your choice</h3>
+  <ul>
+    <li><strong>Join broken lines</strong>: for PDFs and emails, where lines break mid-sentence. Also removes page numbers, repeated headers and &gt; reply markers.</li>
+    <li><strong>Remove bullets and numbering</strong> from the start of lines.</li>
+    <li><strong>Keep curly quotes</strong> and dashes, for InDesign or Word.</li>
+    <li><strong>One line</strong>: everything on a single line, for a form field or spreadsheet cell.</li>
+  </ul>
+  <p>If the app spots something one of these would fix, it suggests it.</p>
+
+  <h3>More tools</h3>
+  <p>
+    Change case, sort lines, remove duplicates, find and replace, strip HTML
+    and reduce to plain ASCII. Each applies once, and Undo takes it back.
+  </p>
+
   <h3>Your text stays here</h3>
   <p>
-    Every operation runs in this browser tab. There is no server, no account,
-    no analytics and no network request. Closing the tab is all it takes to
-    get rid of the text; the page also works with no connection at all.
+    Everything runs in this browser tab. There is no server, no account and
+    no tracking, and the page works with no connection at all.
   </p>
-  <h3>Worth knowing</h3>
-  <ul>
-    <li><strong>The bar at the top</strong> lists what is actually wrong with the text you pasted. Each item switches on the operation that fixes it.</li>
-    <li><strong>Reveal hidden</strong> shows the characters you cannot see: non-breaking spaces, zero-width spaces, soft hyphens and tabs.</li>
-    <li><strong>Operations always run in the same order</strong> regardless of the order you switch them on, so the result never depends on what you clicked first.</li>
-    <li><strong>Copy</strong> writes plain text only, so nothing carries formatting into the next application.</li>
-  </ul>
-  <h3>Keyboard</h3>
-  <dl class="shortcuts" id="shortcuts"></dl>
-  <form method="dialog"><button type="submit" class="tool-button primary">Close</button></form>
-</dialog>
 
-<div class="inspector" id="inspector" hidden>
-  <button type="button" class="inspector-head" id="inspector-toggle" aria-expanded="false">
-    <span>Every unusual character in this text</span>
-    <span class="inspector-count" id="inspector-count"></span>
-  </button>
-  <div class="inspector-body" id="inspector-body" hidden></div>
-</div>
+  <h3>Shortcuts</h3>
+  <dl class="shortcuts">
+    <dt>Ctrl / Cmd + V</dt><dd>Paste anywhere on the page</dd>
+    <dt>Ctrl / Cmd + Enter</dt><dd>Copy the clean text</dd>
+    <dt>Ctrl / Cmd + Z</dt><dd>Undo</dd>
+    <dt>Escape</dt><dd>Close a menu or go back to the clean text</dd>
+  </dl>
+
+  <div class="dialog-actions"><button type="button" class="tool-button primary" id="about-close">Close</button></div>
+</dialog>
 
 <script type="module" src="src/main.js"></script>
 </body>

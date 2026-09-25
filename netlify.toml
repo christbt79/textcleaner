@@ -8,9 +8,10 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    # The app makes no network requests at all, so the policy can say exactly
-    # that. connect-src 'none' means a future mistake cannot quietly start
-    # sending someone's text anywhere.
+    # The app never sends anything anywhere, so the policy can say exactly
+    # that. connect-src 'self' lets the offline cache refresh itself from this
+    # site and nowhere else, so a future mistake cannot quietly start sending
+    # someone's text to another server.
     Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"

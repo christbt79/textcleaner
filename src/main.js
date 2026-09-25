@@ -1,514 +1,637 @@
 /**
- * Application entry point: wires the DOM to the pipeline.
+ * Application entry point.
  *
- * The whole app is one cycle. Text or settings change, the pipeline runs, and
- * the output, statistics, issue bar and character inspector are redrawn from
- * the result. Nothing else mutates the page.
+ * The page holds three pieces of state: the text as it was pasted, the
+ * switches, and the one-off tools applied since. What the box shows is always
+ * derived from those three, so turning a switch on or off after pasting
+ * simply re-cleans the original paste instead of trying to reverse a clean.
  */
 
-import { runPipeline, OPERATIONS_BY_ID } from './core/pipeline.js'
-import { PRESETS_BY_ID, DEFAULT_PRESET } from './core/presets.js'
-import { scanText, inspectCharacters } from './core/scan.js'
-import { computeStats, formatBytes, formatCount, formatDuration } from './core/stats.js'
-import { looksLikeHtml } from './core/ops/markup.js'
-
-import { $, el, replaceChildren, debounce, isCommandKey, isTypingTarget } from './ui/dom.js'
 import {
-  applyPreset, buildRecipeLink, loadState, loadText, saveState, saveText,
-  setOperation, setParam,
-} from './ui/state.js'
-import { renderPresets, renderRail } from './ui/controls.js'
-import { renderIssues, renderInspector } from './ui/issues.js'
-import { renderOutput } from './ui/output.js'
-import { createPalette } from './ui/palette.js'
+  DEFAULT_OPTIONS, SWITCHES, TOOLS, TOOLS_BY_ID, applySteps, cleanText,
+  describeChanges, findSuggestions, joinList,
+} from './core/cleaner.js'
+import { computeStats } from './core/stats.js'
+import { buildSearchRegex, countMatches } from './core/ops/transform.js'
+import { normaliseNewlines } from './core/ops/repair.js'
+import { $, el, replaceChildren, debounce, isCommandKey } from './ui/dom.js'
+import { renderMarked } from './ui/reveal.js'
 import { SAMPLE_TEXT } from './ui/sample.js'
 
+const OPTIONS_KEY = 'textcleaner.options.v2'
+const THEME_KEY = 'textcleaner.theme.v2'
+const HISTORY_LIMIT = 50
+const MAX_FILE_BYTES = 12 * 1024 * 1024
+const THEMES = ['light', 'dark']
+const COPY_LABEL = 'Copy clean text'
+
 const dom = {
-  presetChips: $('preset-chips'),
-  railGroups: $('rail-groups'),
-  railFilter: $('rail-filter'),
-  activeCount: $('active-count'),
-  issueBar: $('issue-bar'),
-  issueChips: $('issue-chips'),
-  issueTitle: $('issue-bar-title'),
-  fixAll: $('fix-all'),
-  input: $('input'),
-  inputStats: $('input-stats'),
-  output: $('output'),
-  outputEmpty: $('output-empty'),
-  outputStats: $('output-stats'),
-  inspector: $('inspector'),
-  inspectorToggle: $('inspector-toggle'),
-  inspectorBody: $('inspector-body'),
-  inspectorCount: $('inspector-count'),
-  revealToggle: $('reveal-toggle'),
-  useHtml: $('use-html'),
+  box: $('box'),
+  text: $('text'),
+  original: $('original'),
+  emptyState: $('empty-state'),
+  report: $('report'),
+  summary: $('summary'),
+  summaryText: $('summary-text'),
+  originalButton: $('original-button'),
+  suggestions: $('suggestions'),
+  replaceBar: $('replace-bar'),
+  findInput: $('find-input'),
+  replaceInput: $('replace-input'),
+  matchCase: $('match-case'),
+  useRegex: $('use-regex'),
+  matchCount: $('match-count'),
+  switches: $('switches'),
+  toolsButton: $('tools-button'),
+  toolsPanel: $('tools-panel'),
+  undoButton: $('undo-button'),
+  clearButton: $('clear-button'),
+  copyButton: $('copy-button'),
+  counts: $('counts'),
   toast: $('toast'),
-  workspace: $('workspace'),
-  paneSwitch: $('pane-switch'),
-  dropHint: $('drop-hint'),
+  about: $('about'),
 }
 
-const state = loadState()
-let clipboardHtml = ''
-let lastOutput = ''
+// --- Preferences ----------------------------------------------------------
+// Only the switches and the theme are remembered. The text never is.
+
+function readStorage(key) {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Private browsing or blocked storage: the app works, it just forgets.
+  }
+}
+
+function loadSavedOptions() {
+  try {
+    const saved = JSON.parse(readStorage(OPTIONS_KEY) ?? '{}')
+    const out = {}
+    for (const option of SWITCHES) {
+      if (typeof saved[option.id] === 'boolean') out[option.id] = saved[option.id]
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveOptions() {
+  const out = {}
+  for (const option of SWITCHES) out[option.id] = Boolean(state.options[option.id])
+  writeStorage(OPTIONS_KEY, JSON.stringify(out))
+}
+
+// --- State ----------------------------------------------------------------
+
+const state = {
+  raw: '',
+  options: { ...DEFAULT_OPTIONS, ...loadSavedOptions() },
+  steps: [],
+  view: 'clean',
+}
+
+const history = []
+
+let copyTimer = 0
+
+/** The cleaned text before any tools, which is what the summary describes. */
+let cleaned = ''
+
+/** True once the user has typed in the box since the app last filled it. */
+let edited = false
+
+function remember() {
+  history.push({
+    raw: state.raw,
+    steps: state.steps.map((step) => ({ ...step })),
+    options: { ...state.options },
+  })
+  if (history.length > HISTORY_LIMIT) history.shift()
+}
 
 // --- Rendering ------------------------------------------------------------
 
-/** One pass: run the pipeline and redraw everything that depends on it. */
-function update() {
-  const input = dom.input.value
-  const { text, errors } = runPipeline(input, {
-    enabled: [...state.enabled],
-    params: state.params,
-  })
-  lastOutput = text
-
-  renderOutput(dom.output, dom.outputEmpty, text, { reveal: state.reveal })
-  renderStats(dom.inputStats, input, { label: 'Original' })
-  renderStats(dom.outputStats, text, { label: 'Cleaned', compareWith: input, errors })
-
-  const issues = scanText(input)
-  renderIssues(
-    { bar: dom.issueBar, chips: dom.issueChips, title: dom.issueTitle, fixAll: dom.fixAll },
-    issues, state, { onFix: toggleIssue },
-  )
-  renderInspector(
-    { panel: dom.inspector, body: dom.inspectorBody, count: dom.inspectorCount },
-    inspectCharacters(input),
-  )
-
-  dom.activeCount.textContent = state.enabled.size === 1
-    ? '1 operation on'
-    : state.enabled.size + ' operations on'
+function render() {
+  cleaned = cleanText(state.raw, state.options)
+  const text = applySteps(cleaned, state.steps)
+  edited = false
+  if (dom.text.value !== text) dom.text.value = text
+  renderView()
+  renderReport()
+  renderControls()
 }
 
-function drawRail() {
-  renderRail(dom.railGroups, state, {
-    filter: dom.railFilter.value,
-    onToggle: toggleOperation,
-    onParam: changeParam,
-    onGroupToggle: toggleGroup,
-  })
+function renderView() {
+  const showOriginal = state.view === 'original' && state.raw !== ''
+  dom.text.hidden = showOriginal
+  dom.original.hidden = !showOriginal
+  if (showOriginal) renderMarked(dom.original, state.raw)
+  dom.emptyState.hidden = showOriginal || dom.text.value !== ''
+  renderCounts()
 }
 
-/** Redraws the controls, then the output. */
-function updateAll() {
-  renderPresets(dom.presetChips, state, { onPick: pickPreset })
-  drawRail()
-  update()
-  saveState(state)
+function stepDone(step) {
+  return TOOLS_BY_ID.get(step.id)?.done ?? step.id
 }
 
-function renderStats(container, text, { label, compareWith, errors = [] }) {
+function renderReport() {
+  const hasText = state.raw.trim() !== ''
+  const showingOriginal = state.view === 'original'
+
+  let summary = ''
+  if (hasText && showingOriginal) {
+    summary = 'This is your original paste. Characters that are not plain text are highlighted: hover over one to see what it is.'
+  } else if (hasText && !edited) {
+    const sentences = describeChanges(state.raw, cleaned, state.options)
+    if (state.steps.length) sentences.push('Then ' + joinList(state.steps.map(stepDone)) + '.')
+    summary = sentences.length ? sentences.join(' ') : 'Nothing needed fixing. The text was already clean.'
+  }
+  dom.summaryText.textContent = summary
+  dom.summary.hidden = !summary
+  dom.summary.classList.toggle('is-note', showingOriginal)
+
+  const changed = normaliseNewlines(state.raw) !== dom.text.value
+  dom.originalButton.hidden = !(showingOriginal || (hasText && changed && !edited))
+  dom.originalButton.textContent = showingOriginal ? 'Back to clean text' : 'Show original'
+
+  const suggestions = hasText && !showingOriginal ? findSuggestions(state.raw, state.options) : []
+  replaceChildren(dom.suggestions, suggestions.map((suggestion) =>
+    el('div', { class: 'suggestion' },
+      el('span', {}, suggestion.text),
+      el('button', {
+        type: 'button',
+        class: 'tool-button',
+        onclick: () => turnOn(suggestion.option, suggestion.button),
+      }, suggestion.button))))
+  dom.suggestions.hidden = suggestions.length === 0
+
+  dom.report.hidden = dom.summary.hidden && dom.suggestions.hidden
+}
+
+function renderControls() {
+  for (const option of SWITCHES) {
+    const input = $('opt-' + option.id)
+    if (input) input.checked = Boolean(state.options[option.id])
+  }
+  dom.undoButton.disabled = history.length === 0
+  dom.clearButton.disabled = dom.text.value === '' && state.raw === ''
+  dom.copyButton.disabled = dom.text.value === ''
+}
+
+/** What the strip along the bottom of the box counts, in order. */
+const COUNTS = [
+  { key: 'words', label: 'Words' },
+  { key: 'charactersNoSpaces', label: 'Characters', hint: 'Not counting spaces or line breaks' },
+  { key: 'characters', label: 'Characters (with spaces)', hint: 'Every character, including spaces and line breaks' },
+  { key: 'paragraphs', label: 'Paragraphs', hint: 'Blocks of text separated by a blank line' },
+  { key: 'lines', label: 'Lines' },
+]
+
+/** Counts describe the clean text, so they are hidden while the original is on show. */
+function renderCounts() {
+  const text = dom.text.value
+  dom.counts.hidden = text === '' || state.view === 'original'
+  if (dom.counts.hidden) return
   const stats = computeStats(text)
-  const parts = [
-    stat(label, ''),
-    stat('Words', formatCount(stats.words)),
-    stat('Characters', formatCount(stats.characters)),
-    stat('Lines', formatCount(stats.lines)),
-    stat('Paragraphs', formatCount(stats.paragraphs)),
-    stat('Read', formatDuration(stats.readingMinutes)),
-    stat('Size', formatBytes(stats.bytes)),
-  ]
-
-  if (compareWith !== undefined && compareWith !== text) {
-    const removed = [...compareWith].length - stats.characters
-    if (removed !== 0) {
-      parts.push(el('span', { class: 'stat stat-change' },
-        (removed > 0 ? 'Removed ' : 'Added ') + formatCount(Math.abs(removed)) + ' characters'))
-    }
-  }
-
-  for (const error of errors) {
-    parts.push(el('span', { class: 'stat stat-error' }, error.label + ' failed: ' + error.message))
-  }
-
-  replaceChildren(container, parts)
-}
-
-function stat(label, value) {
-  return value === ''
-    ? el('span', { class: 'stat' }, el('b', {}, label))
-    : el('span', { class: 'stat' }, label + ' ', el('b', {}, value))
+  replaceChildren(dom.counts, COUNTS.map((count) =>
+    el('div', { class: 'stat', title: count.hint ?? null },
+      el('dt', {}, count.label),
+      el('dd', {}, stats[count.key].toLocaleString()))))
 }
 
 // --- Actions --------------------------------------------------------------
 
-function pickPreset(presetId) {
-  applyPreset(state, presetId)
-  updateAll()
-  const preset = PRESETS_BY_ID.get(presetId)
-  if (preset) toast(preset.label + ' applied')
-}
-
-function toggleOperation(id, on) {
-  setOperation(state, id, on)
-  updateAll()
-}
-
-function changeParam(opId, key, value, { rerender = false, focusLastRule = false } = {}) {
-  setParam(state, opId, key, value)
-  // The rail is not redrawn while a field is being typed into: doing so would
-  // steal the focus. Only structural changes, such as adding or removing a
-  // rule, ask for a redraw.
-  renderPresets(dom.presetChips, state, { onPick: pickPreset })
-  if (rerender) {
-    drawRail()
-    if (focusLastRule) {
-      const inputs = dom.railGroups.querySelectorAll('.rule input[aria-label="Find"]')
-      inputs[inputs.length - 1]?.focus()
-    }
-  }
-  update()
-  saveState(state)
-}
-
-function toggleGroup(groupId) {
-  if (state.openGroups.has(groupId)) state.openGroups.delete(groupId)
-  else state.openGroups.add(groupId)
-  updateAll()
-}
-
-/** Switching an issue on enables the first operation that fixes it. */
-function toggleIssue(issue, on) {
-  if (on) {
-    setOperation(state, issue.ops[0], true)
+/** Replaces the text with a new paste, cleaned. */
+function load(raw, { stripHtml = false, caret = null, message = '' } = {}) {
+  remember()
+  clearTimeout(copyTimer)
+  dom.copyButton.textContent = COPY_LABEL
+  state.raw = raw
+  state.steps = []
+  state.options.stripHtml = stripHtml
+  state.view = 'clean'
+  render()
+  dom.text.focus()
+  if (caret === null) {
+    dom.text.setSelectionRange(0, 0)
+    dom.text.scrollTop = 0
   } else {
-    for (const opId of issue.ops) setOperation(state, opId, false)
+    const at = Math.min(caret, dom.text.value.length)
+    dom.text.setSelectionRange(at, at)
   }
-  updateAll()
+  if (message) toast(message)
 }
 
-function fixEverything() {
-  for (const issue of scanText(dom.input.value)) {
-    if (issue.ops.length && !issue.ops.some((id) => state.enabled.has(id))) {
-      setOperation(state, issue.ops[0], true)
-    }
+function setOption(id, value) {
+  if (state.raw) remember()
+  state.options[id] = value
+  saveOptions()
+  render()
+}
+
+/** Switches something on from a suggestion or a tool. */
+function turnOn(option, label) {
+  if (state.options[option]) {
+    toast(label + ' is already on')
+    return
   }
-  updateAll()
-  toast('Every problem found is now being fixed')
+  remember()
+  state.options[option] = true
+  if (SWITCHES.some((s) => s.id === option)) saveOptions()
+  render()
+  toast(label + ': done. Undo takes it back.')
 }
 
-function resetOperations() {
-  applyPreset(state, DEFAULT_PRESET)
-  dom.railFilter.value = ''
-  updateAll()
-  toast('Back to Safe paste')
+function runTool(tool) {
+  closeToolsPanel()
+  if (tool.kind === 'dialog') {
+    openReplaceBar()
+    return
+  }
+  if (!dom.text.value.trim()) {
+    toast('Paste some text first')
+    return
+  }
+  if (tool.kind === 'option') {
+    turnOn(tool.option, tool.label)
+    return
+  }
+
+  const before = dom.text.value
+  remember()
+  state.steps.push({ id: tool.id })
+  render()
+  if (dom.text.value === before) {
+    // Nothing changed, so there is nothing worth undoing either.
+    history.pop()
+    state.steps.pop()
+    render()
+    toast('Nothing to change')
+  } else {
+    toast(tool.label + ' applied')
+  }
 }
 
-async function copyOutput() {
-  if (!lastOutput) {
+function undo() {
+  const previous = history.pop()
+  if (!previous) return
+  state.raw = previous.raw
+  state.steps = previous.steps
+  state.options = previous.options
+  state.view = 'clean'
+  saveOptions()
+  render()
+  toast('Undone')
+}
+
+function clearText() {
+  if (!dom.text.value && !state.raw) return
+  load('')
+}
+
+function toggleOriginal() {
+  state.view = state.view === 'original' ? 'clean' : 'original'
+  renderView()
+  renderReport()
+  if (state.view === 'original') dom.original.focus()
+  else dom.text.focus()
+}
+
+async function copy() {
+  const text = dom.text.value
+  if (!text) {
     toast('Nothing to copy yet')
     return
   }
-  const ok = await writeToClipboard(lastOutput)
-  toast(ok ? 'Copied as plain text' : 'The browser blocked the clipboard, so select and copy')
+  if (!(await writeClipboard(text))) {
+    toast('Your browser blocked copying. Select the text and copy it yourself.')
+    return
+  }
+  dom.copyButton.textContent = 'Copied'
+  clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => { dom.copyButton.textContent = COPY_LABEL }, 1600)
+  toast('Copied as plain text. Paste it anywhere.')
 }
 
 /**
- * Writes plain text only.
- *
- * That is the point of the Copy button: a rich-text clipboard entry is exactly
- * what carries formatting into the next application.
+ * Writes plain text only. That is the point of the button: a rich clipboard
+ * entry is exactly what carries formatting into the next application.
  */
-async function writeToClipboard(text) {
+async function writeClipboard(text) {
   try {
     await navigator.clipboard.writeText(text)
     return true
   } catch {
-    return copyBySelection(text)
+    const staging = el('textarea', {
+      style: 'position:fixed;top:-1000px;left:-1000px;opacity:0',
+      'aria-hidden': 'true',
+    })
+    staging.value = text
+    document.body.append(staging)
+    staging.select()
+    let ok = false
+    try {
+      ok = document.execCommand('copy')
+    } catch {
+      ok = false
+    }
+    staging.remove()
+    return ok
   }
-}
-
-/** The fallback for browsers or contexts where the async clipboard is denied. */
-function copyBySelection(text) {
-  const staging = el('textarea', {
-    value: text,
-    style: 'position:fixed;top:-1000px;left:-1000px;opacity:0',
-    'aria-hidden': 'true',
-  })
-  document.body.append(staging)
-  staging.select()
-  let ok = false
-  try {
-    ok = document.execCommand('copy')
-  } catch {
-    ok = false
-  }
-  staging.remove()
-  dom.input.focus()
-  return ok
-}
-
-async function pasteFromClipboard() {
-  try {
-    const text = await navigator.clipboard.readText()
-    setInput(text)
-    toast('Pasted')
-  } catch {
-    dom.input.focus()
-    toast('The browser needs you to paste with the keyboard')
-  }
-}
-
-function downloadOutput() {
-  if (!lastOutput) {
-    toast('Nothing to save yet')
-    return
-  }
-  const blob = new Blob([lastOutput], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = el('a', { href: url, download: 'cleaned.txt' })
-  document.body.append(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-function setInput(text, { keepHtml = false } = {}) {
-  dom.input.value = text
-  if (!keepHtml) setClipboardHtml('')
-  saveText(text)
-  update()
-}
-
-function setClipboardHtml(html) {
-  clipboardHtml = html
-  dom.useHtml.hidden = !html
 }
 
 let toastTimer = 0
+
 function toast(message) {
   dom.toast.textContent = message
   dom.toast.classList.add('is-visible')
   clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => dom.toast.classList.remove('is-visible'), 2200)
+  toastTimer = setTimeout(() => dom.toast.classList.remove('is-visible'), 2400)
+}
+
+// --- Find and replace -----------------------------------------------------
+
+function replaceParams() {
+  return {
+    find: dom.findInput.value,
+    replace: dom.replaceInput.value,
+    matchCase: dom.matchCase.checked,
+    regex: dom.useRegex.checked,
+  }
+}
+
+function updateMatchCount() {
+  const params = replaceParams()
+  if (!params.find) {
+    dom.matchCount.textContent = ''
+    return
+  }
+  if (!buildSearchRegex(params)) {
+    dom.matchCount.textContent = 'Invalid pattern'
+    return
+  }
+  const n = countMatches(dom.text.value, params)
+  dom.matchCount.textContent = n === 1 ? '1 match' : n + ' matches'
+}
+
+function openReplaceBar() {
+  dom.replaceBar.hidden = false
+  dom.findInput.focus()
+  dom.findInput.select()
+  updateMatchCount()
+}
+
+function closeReplaceBar() {
+  dom.replaceBar.hidden = true
+}
+
+function replaceAll() {
+  const params = replaceParams()
+  if (!params.find) {
+    dom.findInput.focus()
+    return
+  }
+  const n = buildSearchRegex(params) ? countMatches(dom.text.value, params) : 0
+  if (!n) {
+    toast('No matches')
+    return
+  }
+  remember()
+  state.steps.push({ id: 'replace', params })
+  render()
+  updateMatchCount()
+  toast('Replaced ' + (n === 1 ? '1 match' : n + ' matches'))
+}
+
+// --- More tools -----------------------------------------------------------
+
+function buildToolsPanel() {
+  const groups = [...new Set(TOOLS.map((tool) => tool.group))]
+  replaceChildren(dom.toolsPanel, groups.map((group) =>
+    el('div', { class: 'tool-group' },
+      el('h3', {}, group),
+      el('div', { class: 'tool-group-buttons' },
+        TOOLS.filter((tool) => tool.group === group).map((tool) =>
+          el('button', {
+            type: 'button',
+            class: 'tool-button',
+            title: tool.hint ?? null,
+            onclick: () => runTool(tool),
+          }, tool.kind === 'dialog' ? tool.label + '...' : tool.label))))))
+}
+
+function openToolsPanel() {
+  dom.toolsPanel.hidden = false
+  dom.toolsButton.setAttribute('aria-expanded', 'true')
+}
+
+function closeToolsPanel() {
+  dom.toolsPanel.hidden = true
+  dom.toolsButton.setAttribute('aria-expanded', 'false')
+}
+
+// --- Switches -------------------------------------------------------------
+
+function buildSwitches() {
+  replaceChildren(dom.switches, SWITCHES.map((option) =>
+    el('label', { class: 'switch', title: option.hint },
+      el('input', {
+        type: 'checkbox',
+        role: 'switch',
+        id: 'opt-' + option.id,
+        checked: state.options[option.id],
+        onchange: (event) => setOption(option.id, event.target.checked),
+      }),
+      el('span', {}, option.label))))
 }
 
 // --- Theme ----------------------------------------------------------------
 
-const THEMES = ['auto', 'dark', 'light']
+// Light unless the user has picked dark.
+let theme = readStorage(THEME_KEY)
+if (!THEMES.includes(theme)) theme = 'light'
 
 function applyTheme() {
-  document.documentElement.dataset.theme = state.theme
+  document.documentElement.dataset.theme = theme
+  const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+  const button = $('theme-button')
+  button.title = label
+  button.setAttribute('aria-label', label)
 }
 
-function cycleTheme() {
-  state.theme = THEMES[(THEMES.indexOf(state.theme) + 1) % THEMES.length]
+function toggleTheme() {
+  theme = theme === 'dark' ? 'light' : 'dark'
   applyTheme()
-  saveState(state)
-  toast('Theme: ' + state.theme)
-}
-
-// --- Panes on small screens -----------------------------------------------
-
-function setMobileView(view) {
-  document.body.dataset.mobileView = view
-  for (const button of dom.paneSwitch.querySelectorAll('button')) {
-    button.classList.toggle('is-active', button.dataset.view === view)
-  }
+  writeStorage(THEME_KEY, theme)
 }
 
 // --- Events ---------------------------------------------------------------
 
-const persist = debounce((text) => saveText(text), 400)
-
-dom.input.addEventListener('input', () => {
-  update()
-  persist(dom.input.value)
-})
-
 /**
- * A paste usually carries both plain text and HTML. The plain text is what the
- * textarea takes, which is right by default, but the HTML holds the list and
- * link structure, so it is kept in case the user wants it.
+ * A paste anywhere on the page lands in the box, cleaned. A paste into text
+ * the user is editing by hand goes where the cursor is, as in any editor;
+ * otherwise it replaces what was there, which is the paste-clean-copy loop.
  */
-dom.input.addEventListener('paste', (event) => {
-  const html = event.clipboardData?.getData('text/html') ?? ''
-  setClipboardHtml(html && looksLikeHtml(html) ? html : '')
-})
-
-dom.useHtml.addEventListener('click', () => {
-  if (!clipboardHtml) return
-  setInput(clipboardHtml, { keepHtml: true })
-  setOperation(state, 'htmlToText', true)
-  updateAll()
-  toast('Loaded the rich source and switched on Strip HTML')
-})
-
-dom.railFilter.addEventListener('input', drawRail)
-
-dom.revealToggle.addEventListener('change', () => {
-  state.reveal = dom.revealToggle.checked
-  saveState(state)
-  update()
-})
-
-dom.inspectorToggle.addEventListener('click', () => {
-  const open = dom.inspectorBody.hidden
-  dom.inspectorBody.hidden = !open
-  dom.inspectorToggle.setAttribute('aria-expanded', String(open))
-})
-
-$('copy-button').addEventListener('click', copyOutput)
-$('download-button').addEventListener('click', downloadOutput)
-$('paste-button').addEventListener('click', pasteFromClipboard)
-$('clear-button').addEventListener('click', () => {
-  setInput('')
-  dom.input.focus()
-})
-$('sample-button').addEventListener('click', () => {
-  setInput(SAMPLE_TEXT)
-  toast('Loaded a sample with one of everything wrong with it')
-})
-$('reuse-button').addEventListener('click', () => {
-  if (!lastOutput) return
-  setInput(lastOutput)
-  toast('Output moved across, ready for another pass')
-})
-$('reset-operations').addEventListener('click', resetOperations)
-dom.fixAll.addEventListener('click', fixEverything)
-$('theme-button').addEventListener('click', cycleTheme)
-$('about-button').addEventListener('click', () => $('about').showModal())
-
-$('copy-recipe').addEventListener('click', async () => {
-  const ok = await writeToClipboard(buildRecipeLink(state))
-  toast(ok
-    ? 'Link copied. It carries the settings only, never the text.'
-    : 'Could not reach the clipboard')
-})
-
-for (const button of dom.paneSwitch.querySelectorAll('button')) {
-  button.addEventListener('click', () => setMobileView(button.dataset.view))
-}
-
-// Drag and drop a text file onto the input.
-const inputBody = dom.input.parentElement
-
-for (const type of ['dragenter', 'dragover']) {
-  inputBody.addEventListener(type, (event) => {
-    if (!event.dataTransfer?.types.includes('Files')) return
-    event.preventDefault()
-    inputBody.classList.add('is-dropping')
-  })
-}
-
-for (const type of ['dragleave', 'drop']) {
-  inputBody.addEventListener(type, (event) => {
-    if (type === 'dragleave' && inputBody.contains(event.relatedTarget)) return
-    inputBody.classList.remove('is-dropping')
-  })
-}
-
-inputBody.addEventListener('drop', async (event) => {
-  const file = event.dataTransfer?.files?.[0]
-  if (!file) return
+document.addEventListener('paste', (event) => {
+  if (event.target instanceof HTMLInputElement || dom.about.open) return
+  const pasted = event.clipboardData?.getData('text/plain') ?? ''
+  if (!pasted) return
   event.preventDefault()
-  if (file.size > 12 * 1024 * 1024) {
+  closeToolsPanel()
+
+  if (event.target === dom.text && edited) {
+    const { value, selectionStart, selectionEnd } = dom.text
+    load(value.slice(0, selectionStart) + pasted + value.slice(selectionEnd), {
+      stripHtml: state.options.stripHtml,
+      caret: selectionStart + cleanText(pasted, state.options).length,
+    })
+    return
+  }
+  load(pasted)
+})
+
+const refreshWhileTyping = debounce(() => {
+  if (edited) renderReport()
+}, 300)
+
+dom.text.addEventListener('input', () => {
+  // The first keystroke after the app filled the box is an undo point.
+  if (!edited) remember()
+  edited = true
+  state.raw = dom.text.value
+  state.steps = []
+  state.options.stripHtml = false
+  state.view = 'clean'
+  dom.summary.hidden = true
+  dom.originalButton.hidden = true
+  dom.emptyState.hidden = dom.text.value !== ''
+  renderControls()
+  renderCounts()
+  refreshWhileTyping()
+})
+
+dom.originalButton.addEventListener('click', toggleOriginal)
+dom.copyButton.addEventListener('click', copy)
+dom.undoButton.addEventListener('click', undo)
+dom.clearButton.addEventListener('click', clearText)
+$('example-button').addEventListener('click', () =>
+  load(SAMPLE_TEXT, { message: 'Loaded an example with a bit of everything wrong with it' }))
+$('theme-button').addEventListener('click', toggleTheme)
+$('about-button').addEventListener('click', () => dom.about.showModal())
+$('about-close').addEventListener('click', () => dom.about.close())
+
+dom.toolsButton.addEventListener('click', () => {
+  if (dom.toolsPanel.hidden) openToolsPanel()
+  else closeToolsPanel()
+})
+
+document.addEventListener('click', (event) => {
+  if (!dom.toolsPanel.hidden && !event.target.closest('.tools')) closeToolsPanel()
+})
+
+$('replace-all').addEventListener('click', replaceAll)
+$('replace-close').addEventListener('click', () => {
+  closeReplaceBar()
+  dom.text.focus()
+})
+for (const input of [dom.findInput, dom.replaceInput]) {
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      replaceAll()
+    }
+  })
+}
+dom.findInput.addEventListener('input', updateMatchCount)
+dom.matchCase.addEventListener('change', updateMatchCount)
+dom.useRegex.addEventListener('change', updateMatchCount)
+
+// Drag and drop: a text file, or text dragged from another window.
+for (const type of ['dragenter', 'dragover']) {
+  dom.box.addEventListener(type, (event) => {
+    const types = event.dataTransfer?.types ?? []
+    if (!types.includes('Files') && !types.includes('text/plain')) return
+    event.preventDefault()
+    if (types.includes('Files')) dom.box.classList.add('is-dropping')
+  })
+}
+
+dom.box.addEventListener('dragleave', (event) => {
+  if (!dom.box.contains(event.relatedTarget)) dom.box.classList.remove('is-dropping')
+})
+
+dom.box.addEventListener('drop', async (event) => {
+  dom.box.classList.remove('is-dropping')
+  const file = event.dataTransfer?.files?.[0]
+  const dropped = event.dataTransfer?.getData('text/plain') ?? ''
+  if (!file && !dropped) return
+  event.preventDefault()
+
+  if (!file) {
+    load(dropped)
+    return
+  }
+  if (file.size > MAX_FILE_BYTES) {
     toast('That file is too big to work with comfortably')
     return
   }
   try {
-    const text = await file.text()
-    setInput(text)
-    if (/\.html?$/i.test(file.name) || looksLikeHtml(text)) {
-      setOperation(state, 'htmlToText', true)
-      updateAll()
-    }
-    toast('Loaded ' + file.name)
+    load(await file.text(), { stripHtml: /\.html?$/i.test(file.name), message: 'Loaded ' + file.name })
   } catch {
     toast('That file could not be read as text')
   }
 })
 
-// --- Keyboard -------------------------------------------------------------
-
-const SHORTCUTS = [
-  ['Ctrl / Cmd + K', 'Search presets and operations'],
-  ['Ctrl / Cmd + Enter', 'Copy the clean text'],
-  ['Ctrl / Cmd + Shift + Backspace', 'Clear the input'],
-  ['Ctrl / Cmd + I', 'Reveal hidden characters'],
-  ['Ctrl / Cmd + Shift + R', 'Send the output back to the input'],
-  ['Escape', 'Close a dialog'],
-]
-
-replaceChildren($('shortcuts'), SHORTCUTS.flatMap(([keys, description]) =>
-  [el('dt', {}, keys), el('dd', {}, description)]))
-
-const palette = createPalette(
-  { dialog: $('palette'), input: $('palette-input'), results: $('palette-results') },
-  {
-    getState: () => state,
-    onPreset: pickPreset,
-    onToggle: (id, on) => {
-      toggleOperation(id, on)
-      const op = OPERATIONS_BY_ID.get(id)
-      if (op) toast(op.label + (on ? ' on' : ' off'))
-    },
-    // Picking a mode from the palette also switches its operation on, which is
-    // what someone who searched for that mode by name is asking for.
-    onOption: (opId, key, value) => {
-      setParam(state, opId, key, value)
-      setOperation(state, opId, true)
-      updateAll()
-      const op = OPERATIONS_BY_ID.get(opId)
-      const label = op?.params
-        ?.find((param) => param.key === key)
-        ?.options?.find(([optionValue]) => optionValue === value)?.[1]
-      toast((label ?? op?.label ?? 'Applied') + ' applied')
-    },
-  },
-)
-
-$('palette-button').addEventListener('click', () => palette.open())
-
 document.addEventListener('keydown', (event) => {
-  if (isCommandKey(event) && event.key.toLowerCase() === 'k') {
-    event.preventDefault()
-    palette.open()
+  if (dom.about.open) return
+
+  if (event.key === 'Escape') {
+    if (!dom.toolsPanel.hidden) {
+      closeToolsPanel()
+      dom.toolsButton.focus()
+    } else if (!dom.replaceBar.hidden) {
+      closeReplaceBar()
+      dom.text.focus()
+    } else if (state.view === 'original') {
+      toggleOriginal()
+    }
     return
   }
+
   if (isCommandKey(event) && event.key === 'Enter') {
     event.preventDefault()
-    copyOutput()
+    copy()
     return
   }
-  if (isCommandKey(event) && event.shiftKey && event.key === 'Backspace') {
+
+  // The app's own undo covers pastes, switches and tools. Once the user is
+  // typing, the text box's native undo takes over.
+  if (isCommandKey(event) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'z') {
+    if (event.target instanceof HTMLInputElement || edited || history.length === 0) return
     event.preventDefault()
-    setInput('')
-    return
-  }
-  if (isCommandKey(event) && event.key.toLowerCase() === 'i' && !event.shiftKey) {
-    event.preventDefault()
-    dom.revealToggle.checked = !dom.revealToggle.checked
-    dom.revealToggle.dispatchEvent(new Event('change'))
-    return
-  }
-  if (isCommandKey(event) && event.shiftKey && event.key.toLowerCase() === 'r') {
-    event.preventDefault()
-    if (lastOutput) setInput(lastOutput)
-    return
-  }
-  // A bare keystroke with nothing focused should land in the textarea.
-  if (!isCommandKey(event) && !event.altKey && event.key.length === 1 &&
-      !isTypingTarget(document.activeElement) && !document.querySelector('dialog[open]')) {
-    dom.input.focus()
+    undo()
   }
 })
 
 // --- Start ----------------------------------------------------------------
 
 applyTheme()
-dom.revealToggle.checked = state.reveal
-dom.input.value = loadText()
-setMobileView('input')
-updateAll()
+buildSwitches()
+buildToolsPanel()
+render()
+dom.text.focus()
 
-if (!dom.input.value) dom.input.focus()
-
-// The service worker is what makes the page work with no connection. It is
-// optional: a failure here must never stop the app from running.
+// The service worker is what makes the page work offline. It is optional: a
+// failure here must never stop the app from running.
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {})
