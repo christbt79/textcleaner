@@ -59,6 +59,11 @@ switches and tools alike.
   combination of switches. There is a test for it.
 - **It works offline.** A service worker caches the app on first visit, and it
   is installable as a standalone app.
+- **Counts along the bottom of the box**: words, characters with and
+  without spaces, paragraphs and lines, for the clean text you are about to
+  copy. Handy for anything with a character limit.
+- **Light by default.** The moon button in the top bar switches to dark, and
+  the choice is remembered.
 - **Typing is allowed.** Edit the text by hand and the app steps back; a paste
   while you are editing goes in at the cursor, cleaned.
 

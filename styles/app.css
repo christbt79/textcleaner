@@ -2,45 +2,12 @@
  * Textcleaner
  *
  * One text box, a line saying what was fixed, four switches and a Copy
- * button. Dark by default because this is a tool people keep open beside
- * their work; light follows the system, or the toggle.
+ * button. Light by default; the moon button in the top bar switches to dark.
  */
 
 :root {
-  color-scheme: dark light;
-
-  --bg: #0e1116;
-  --bg-raised: #151a22;
-  --bg-sunken: #0a0d12;
-  --bg-input: #11151c;
-  --border: #232a35;
-  --border-strong: #303947;
-  --text: #e6eaf0;
-  --text-muted: #9aa5b5;
-  --text-faint: #6b7688;
-
-  --accent: #4dd4c1;
-  --accent-ink: #06231f;
-  --accent-soft: rgba(77, 212, 193, 0.14);
-
-  --high: #ff7b72;
-  --high-soft: rgba(255, 123, 114, 0.14);
-  --medium: #e3b341;
-  --medium-soft: rgba(227, 179, 65, 0.12);
-
-  --radius: 12px;
-  --radius-sm: 8px;
-
-  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono",
-    Menlo, Consolas, "Liberation Mono", monospace;
-
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-}
-
-:root[data-theme="light"] {
   color-scheme: light;
+
   --bg: #f4f6f9;
   --bg-raised: #ffffff;
   --bg-sunken: #eaeef3;
@@ -50,37 +17,46 @@
   --text: #171c24;
   --text-muted: #58646f;
   --text-faint: #7e8a98;
+
   --accent: #0d8f7d;
   --accent-ink: #ffffff;
   --accent-soft: rgba(13, 143, 125, 0.12);
+
   --high: #c0392b;
   --high-soft: rgba(192, 57, 43, 0.1);
   --medium: #9a6b00;
   --medium-soft: rgba(154, 107, 0, 0.1);
+
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono",
+    Menlo, Consolas, "Liberation Mono", monospace;
+
   --shadow: 0 18px 44px rgba(20, 30, 45, 0.16);
 }
 
-@media (prefers-color-scheme: light) {
-  :root[data-theme="auto"] {
-    color-scheme: light;
-    --bg: #f4f6f9;
-    --bg-raised: #ffffff;
-    --bg-sunken: #eaeef3;
-    --bg-input: #ffffff;
-    --border: #dde3ea;
-    --border-strong: #c3ccd8;
-    --text: #171c24;
-    --text-muted: #58646f;
-    --text-faint: #7e8a98;
-    --accent: #0d8f7d;
-    --accent-ink: #ffffff;
-    --accent-soft: rgba(13, 143, 125, 0.12);
-    --high: #c0392b;
-    --high-soft: rgba(192, 57, 43, 0.1);
-    --medium: #9a6b00;
-    --medium-soft: rgba(154, 107, 0, 0.1);
-    --shadow: 0 18px 44px rgba(20, 30, 45, 0.16);
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1116;
+  --bg-raised: #151a22;
+  --bg-sunken: #0a0d12;
+  --bg-input: #11151c;
+  --border: #232a35;
+  --border-strong: #303947;
+  --text: #e6eaf0;
+  --text-muted: #9aa5b5;
+  --text-faint: #6b7688;
+  --accent: #4dd4c1;
+  --accent-ink: #06231f;
+  --accent-soft: rgba(77, 212, 193, 0.14);
+  --high: #ff7b72;
+  --high-soft: rgba(255, 123, 114, 0.14);
+  --medium: #e3b341;
+  --medium-soft: rgba(227, 179, 65, 0.12);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
 * { box-sizing: border-box; }
@@ -161,6 +137,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   position: relative;
   flex: 1;
   display: flex;
+  flex-direction: column;
   min-height: 300px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -173,6 +150,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 #text,
 .original {
   flex: 1;
+  min-height: 0;
   width: 100%;
   margin: 0;
   padding: 18px 20px;
@@ -219,6 +197,22 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   pointer-events: none;
 }
 .box.is-dropping .drop-hint { display: grid; }
+
+/* Counts along the bottom of the box, describing the text you will copy. */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  padding: 9px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-sunken);
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+.stat { display: flex; gap: 6px; }
+.stat dt { margin: 0; }
+.stat dd { margin: 0; color: var(--text); font-weight: 560; font-variant-numeric: tabular-nums; }
 
 /* Characters highlighted in the "Show original" view. */
 .mark { border-radius: 3px; }
@@ -399,13 +393,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .tool-button .chevron { width: 13px; height: 13px; transition: transform 0.15s; }
 .tool-button[aria-expanded="false"] .chevron { transform: rotate(180deg); }
 
-.counts {
-  margin-left: auto;
-  color: var(--text-faint);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+#copy-button { margin-left: auto; }
 
 .link-button {
   padding: 0;
@@ -515,7 +503,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
     border-top: 1px solid var(--border);
     background: var(--bg);
   }
-  .counts { display: none; }
+  .stats { padding: 8px 14px; gap: 2px 14px; }
   .actions .primary { order: 6; flex: 1 1 100%; justify-content: center; padding: 12px; }
   .tools-panel { position: fixed; left: 16px; right: 16px; bottom: 16px; width: auto; }
 }

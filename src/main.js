@@ -11,7 +11,7 @@ import {
   DEFAULT_OPTIONS, SWITCHES, TOOLS, TOOLS_BY_ID, applySteps, cleanText,
   describeChanges, findSuggestions, joinList,
 } from './core/cleaner.js'
-import { computeStats, formatCount } from './core/stats.js'
+import { computeStats } from './core/stats.js'
 import { buildSearchRegex, countMatches } from './core/ops/transform.js'
 import { normaliseNewlines } from './core/ops/repair.js'
 import { $, el, replaceChildren, debounce, isCommandKey } from './ui/dom.js'
@@ -19,11 +19,10 @@ import { renderMarked } from './ui/reveal.js'
 import { SAMPLE_TEXT } from './ui/sample.js'
 
 const OPTIONS_KEY = 'textcleaner.options.v2'
-const THEME_KEY = 'textcleaner.theme.v1'
+const THEME_KEY = 'textcleaner.theme.v2'
 const HISTORY_LIMIT = 50
 const MAX_FILE_BYTES = 12 * 1024 * 1024
-const MIDDOT = String.fromCodePoint(0x00b7)
-const THEMES = ['auto', 'dark', 'light']
+const THEMES = ['light', 'dark']
 const COPY_LABEL = 'Copy clean text'
 
 const dom = {
@@ -137,6 +136,7 @@ function renderView() {
   dom.original.hidden = !showOriginal
   if (showOriginal) renderMarked(dom.original, state.raw)
   dom.emptyState.hidden = showOriginal || dom.text.value !== ''
+  renderCounts()
 }
 
 function stepDone(step) {
@@ -185,22 +185,27 @@ function renderControls() {
   dom.undoButton.disabled = history.length === 0
   dom.clearButton.disabled = dom.text.value === '' && state.raw === ''
   dom.copyButton.disabled = dom.text.value === ''
-  renderCounts()
 }
 
-function countLabel(n, one) {
-  return formatCount(n) + ' ' + (n === 1 ? one : one + 's')
-}
+/** What the strip along the bottom of the box counts, in order. */
+const COUNTS = [
+  { key: 'words', label: 'Words' },
+  { key: 'charactersNoSpaces', label: 'Characters', hint: 'Not counting spaces or line breaks' },
+  { key: 'characters', label: 'Characters (with spaces)', hint: 'Every character, including spaces and line breaks' },
+  { key: 'paragraphs', label: 'Paragraphs', hint: 'Blocks of text separated by a blank line' },
+  { key: 'lines', label: 'Lines' },
+]
 
+/** Counts describe the clean text, so they are hidden while the original is on show. */
 function renderCounts() {
   const text = dom.text.value
-  if (!text) {
-    dom.counts.textContent = ''
-    return
-  }
+  dom.counts.hidden = text === '' || state.view === 'original'
+  if (dom.counts.hidden) return
   const stats = computeStats(text)
-  dom.counts.textContent =
-    countLabel(stats.words, 'word') + ' ' + MIDDOT + ' ' + countLabel(stats.characters, 'character')
+  replaceChildren(dom.counts, COUNTS.map((count) =>
+    el('div', { class: 'stat', title: count.hint ?? null },
+      el('dt', {}, count.label),
+      el('dd', {}, stats[count.key].toLocaleString()))))
 }
 
 // --- Actions --------------------------------------------------------------
@@ -451,18 +456,22 @@ function buildSwitches() {
 
 // --- Theme ----------------------------------------------------------------
 
+// Light unless the user has picked dark.
 let theme = readStorage(THEME_KEY)
-if (!THEMES.includes(theme)) theme = 'auto'
+if (!THEMES.includes(theme)) theme = 'light'
 
 function applyTheme() {
   document.documentElement.dataset.theme = theme
+  const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+  const button = $('theme-button')
+  button.title = label
+  button.setAttribute('aria-label', label)
 }
 
-function cycleTheme() {
-  theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]
+function toggleTheme() {
+  theme = theme === 'dark' ? 'light' : 'dark'
   applyTheme()
   writeStorage(THEME_KEY, theme)
-  toast(theme === 'auto' ? 'Theme follows your system' : 'Theme: ' + theme)
 }
 
 // --- Events ---------------------------------------------------------------
@@ -506,6 +515,7 @@ dom.text.addEventListener('input', () => {
   dom.originalButton.hidden = true
   dom.emptyState.hidden = dom.text.value !== ''
   renderControls()
+  renderCounts()
   refreshWhileTyping()
 })
 
@@ -515,7 +525,7 @@ dom.undoButton.addEventListener('click', undo)
 dom.clearButton.addEventListener('click', clearText)
 $('example-button').addEventListener('click', () =>
   load(SAMPLE_TEXT, { message: 'Loaded an example with a bit of everything wrong with it' }))
-$('theme-button').addEventListener('click', cycleTheme)
+$('theme-button').addEventListener('click', toggleTheme)
 $('about-button').addEventListener('click', () => dom.about.showModal())
 $('about-close').addEventListener('click', () => dom.about.close())
 

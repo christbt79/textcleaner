@@ -517,6 +517,8 @@ test('statistics count what people expect', () => {
   assert.equal(stats.paragraphs, 2)
   assert.equal(stats.lines, 3)
   assert.equal(stats.sentences, 2)
+  assert.equal(stats.characters, 36)
+  assert.equal(stats.charactersNoSpaces, 31)
 })
 
 test('statistics handle empty input', () => {

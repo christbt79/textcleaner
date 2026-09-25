@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" data-theme="auto">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Textcleaner</title>
 <meta name="description" content="Paste text from a PDF, Word, InDesign, an email or a web page and get clean plain text back. Runs entirely in your browser.">
-<meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#0e1116">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f6f9">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon.svg">
 <link rel="manifest" href="manifest.webmanifest">
@@ -22,7 +22,7 @@
     <span class="brand-name">Textcleaner</span>
   </div>
   <div class="topbar-actions">
-    <button type="button" class="icon-button" id="theme-button" title="Switch between light and dark" aria-label="Switch between light and dark">
+    <button type="button" class="icon-button" id="theme-button" title="Switch to dark mode" aria-label="Switch to dark mode">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></svg>
     </button>
     <button type="button" class="icon-button" id="about-button" title="How it works" aria-label="How it works">
@@ -42,6 +42,7 @@
       <button type="button" class="link-button" id="example-button">Try an example</button>
     </div>
     <div class="drop-hint">Drop a text file to load it</div>
+    <dl class="stats" id="counts" aria-label="Counts for the clean text" hidden></dl>
   </div>
 
   <section class="report" id="report" aria-live="polite" hidden>
@@ -80,7 +81,6 @@
     </div>
     <button type="button" class="tool-button" id="undo-button" disabled>Undo</button>
     <button type="button" class="tool-button" id="clear-button" disabled>Clear</button>
-    <span class="counts" id="counts"></span>
     <button type="button" class="tool-button primary" id="copy-button" disabled>Copy clean text</button>
   </section>
 
