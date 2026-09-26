@@ -129,15 +129,72 @@ export const PRIVATE_USE_RE = charClass([[0xe000, 0xf8ff]], 'g')
 /** Combining marks, left behind after an NFD decomposition. */
 export const COMBINING_RE = charClass([[0x0300, 0x036f]], 'g')
 
-const EMOJI_SPEC = [
-  [0x1f000, 0x1faff], [0x2600, 0x27bf], [0x2b00, 0x2bff],
-  0xfe0f, [0x1f1e6, 0x1f1ff], [0x2300, 0x23ff], [0x2900, 0x297f],
-]
+// --- Emoji ----------------------------------------------------------------
+//
+// One emoji is often several code points: a picture plus a skin tone or a
+// "show as emoji" selector, pictures glued by zero-width joiners (a family is
+// three people and two joiners), a black flag plus tag letters (Scotland), or
+// a digit plus a keycap mark. The pattern below matches a whole emoji, so
+// removing one never leaves pieces behind.
+
+const ZWJ = ch(0x200d)
+const VS16 = ch(0xfe0f)
+const KEYCAP_MARK = ch(0x20e3)
+const BLACK_FLAG = ch(0x1f3f4)
+const PICTOGRAPH = '\\p{Extended_Pictographic}'
+const SKIN_TONE = '\\p{Emoji_Modifier}'
+
+/**
+ * Symbols Unicode files under emoji that are ordinary typography when written
+ * on their own: copyright, registered and trademark signs, arrows, shapes,
+ * card suits, ticks, and signs such as the warning triangle. They count as
+ * emoji only when the "show as emoji" selector (U+FE0F) follows them.
+ */
+const TEXT_SYMBOL = charClass([
+  0x00a9, 0x00ae, 0x203c, 0x2049, 0x2122, 0x2139, 0x24c2,
+  [0x2194, 0x2199], 0x21a9, 0x21aa, 0x27a1, [0x2b05, 0x2b07], 0x2934, 0x2935,
+  0x25aa, 0x25ab, 0x25b6, 0x25c0, 0x25fb, 0x25fc,
+  0x2640, 0x2642, 0x265f, 0x2660, 0x2663, 0x2665, 0x2666, 0x2668, 0x267b, 0x267e,
+  0x2611, 0x2714, 0x2716, 0x2733, 0x2734, 0x2747, 0x3030, 0x303d,
+  0x23cf, [0x23ed, 0x23ef], [0x23f8, 0x23fa],
+  0x2622, 0x2623, 0x2626, 0x262a, 0x262e, 0x262f, 0x2638, 0x271d, 0x2721,
+  0x2692, 0x2694, 0x2695, 0x2696, 0x2697, 0x2699, 0x269b, 0x269c, 0x26a0, 0x26a7,
+], 'u').source
+
+/** Tag letters or digits closed by a cancel tag: how subdivision flags are spelt. */
+const FLAG_TAGS = charClass([[0xe0030, 0xe0039], [0xe0061, 0xe007a]], 'u').source +
+  '{1,6}' + ch(0xe007f)
+
+const PRESENTATION = '(?:' + VS16 + '|' + SKIN_TONE + ')'
+
+/** One picture: marked as an emoji, or any picture that is not a text symbol. */
+const EMOJI_PART =
+  '(?:' + PICTOGRAPH + PRESENTATION + '+' +
+  '|(?!' + TEXT_SYMBOL + ')' + PICTOGRAPH + PRESENTATION + '*)' +
+  '(?:' + FLAG_TAGS + ')?'
+
+/** Source for one whole emoji, however many code points it takes. */
+export const EMOJI_PATTERN = '(?:' +
+  '[0-9#*]' + VS16 + '?' + KEYCAP_MARK +
+  '|\\p{Regional_Indicator}{1,2}' +
+  '|' + EMOJI_PART + '(?:' + ZWJ + PICTOGRAPH + PRESENTATION + '*)*' +
+  '|' + SKIN_TONE +
+  ')'
 
 /** A fresh regex each call, because a shared `g` regex carries `lastIndex`. */
 export function emojiRegex() {
-  return charClass(EMOJI_SPEC)
+  return new RegExp(EMOJI_PATTERN, 'gu')
 }
+
+/**
+ * The invisible characters that hold an emoji together: a zero-width joiner
+ * between two pictures, and the tag letters after a black flag. Removing them
+ * splits a family into separate people or turns the Scotland flag plain black.
+ */
+export const EMOJI_GLUE_PATTERN = '(?:' +
+  '(?<=[' + PICTOGRAPH + SKIN_TONE + VS16 + '])' + ZWJ + '(?=' + PICTOGRAPH + ')' +
+  '|(?<=' + BLACK_FLAG + ')' + FLAG_TAGS +
+  ')'
 
 // --- Substitution tables --------------------------------------------------
 

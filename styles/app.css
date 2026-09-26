@@ -126,7 +126,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 980px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 20px 24px 24px;
 }
@@ -316,13 +316,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
-.switches { display: flex; flex-wrap: wrap; gap: 8px; }
+.switches { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .switch {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 13px 6px 9px;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
   border: 1px solid var(--border);
   border-radius: 100px;
   color: var(--text-muted);

@@ -7,7 +7,7 @@
  * next visit.
  */
 
-const CACHE = 'formatmytext-v1'
+const CACHE = 'formatmytext-v2'
 
 const SHELL = [
   './',

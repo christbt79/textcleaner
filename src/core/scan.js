@@ -10,7 +10,7 @@ import {
   BIDI_RE, BULLET_RE, CONTROL_RE, EXOTIC_SPACE_RE, INVISIBLE_RE, LIGATURE_RE,
   MOJIBAKE_HINT_RE, OBJECT_REPLACEMENT_RE, PRIVATE_USE_RE, REPLACEMENT,
   SMART_DASH_RE, SMART_QUOTE_RE, SOFT_HYPHEN, TAG_CHARS_RE, describeCodePoint,
-  emojiRegex, formatCodePoint, isInvisibleCodePoint,
+  emojiRegex, EMOJI_GLUE_PATTERN, formatCodePoint, isInvisibleCodePoint,
 } from './chars.js'
 import { looksLikeHtml } from './ops/markup.js'
 import { isListItem } from './ops/lines.js'
@@ -20,6 +20,14 @@ function count(text, re) {
   const flags = re.flags.includes('g') ? re.flags : re.flags + 'g'
   const matches = text.match(new RegExp(re.source, flags))
   return matches ? matches.length : 0
+}
+
+/**
+ * Counts invisible characters that are junk, leaving out the joiners and tag
+ * letters that hold an emoji together: those are part of the picture.
+ */
+function countOutsideEmoji(text, re) {
+  return count(text.replace(new RegExp(EMOJI_GLUE_PATTERN, 'gu'), ''), re)
 }
 
 const HYPHEN_BREAK_RE = new RegExp(
@@ -105,7 +113,7 @@ const CHECKS = [
     label: 'Invisible tag characters',
     detail: 'Invisible code points sometimes used to watermark or fingerprint text.',
     ops: ['removeInvisibles'],
-    count: (t) => count(t, TAG_CHARS_RE),
+    count: (t) => countOutsideEmoji(t, TAG_CHARS_RE),
   },
   {
     id: 'bidi',
@@ -145,7 +153,7 @@ const CHECKS = [
     label: 'Invisible characters',
     detail: 'Zero-width spaces, soft hyphens and byte order marks. They break search, sorting and word counts.',
     ops: ['removeInvisibles'],
-    count: (t) => count(t, INVISIBLE_RE),
+    count: (t) => countOutsideEmoji(t, INVISIBLE_RE),
   },
   {
     id: 'controls',

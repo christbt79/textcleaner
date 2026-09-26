@@ -53,8 +53,8 @@ test('every switch and the always-on set name real pipeline operations', () => {
   }
 })
 
-test('there are exactly four visible switches, all off by default', () => {
-  assert.equal(SWITCHES.length, 4)
+test('there are exactly five visible switches, all off by default', () => {
+  assert.deepEqual(SWITCHES.map((s) => s.id), ['joinLines', 'removeBullets', 'keepQuotes', 'oneLine', 'removeEmojis'])
   for (const option of SWITCHES) {
     assert.equal(DEFAULT_OPTIONS[option.id], false, option.id + ' should default to off')
     assert.ok(option.label && option.hint, option.id + ' needs a label and a hint')
@@ -210,6 +210,58 @@ test('HTML suggests stripping the tags', () => {
 
 test('ordinary prose gets no suggestions', () => {
   assert.deepEqual(findSuggestions('A normal sentence.\n\nAnother normal sentence.'), [])
+})
+
+// --- Emoji ----------------------------------------------------------------
+
+const GRIN = u(0x1f600)
+const THUMBS_UP_MEDIUM = u(0x1f44d, 0x1f3fd)
+const FAMILY = u(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467)
+const UK_FLAG = u(0x1f1ec, 0x1f1e7)
+const SCOTLAND_FLAG = u(0x1f3f4, 0xe0067, 0xe0062, 0xe0073, 0xe0063, 0xe0074, 0xe007f)
+const KEYCAP_ONE = u(0x31, 0xfe0f, 0x20e3)
+const RED_HEART = u(0x2764, 0xfe0f)
+const WOMAN_RUNNING = u(0x1f3c3, 0x200d, 0x2640, 0xfe0f)
+const COPYRIGHT = u(0x00a9)
+const TRADEMARK = u(0x2122)
+const LEFT_RIGHT_ARROW = u(0x2194)
+const CHECK_MARK = u(0x2713)
+
+test('remove emojis takes whole emojis out, pieces and all', () => {
+  const options = { removeEmojis: true }
+  for (const emoji of [GRIN, THUMBS_UP_MEDIUM, FAMILY, UK_FLAG, SCOTLAND_FLAG, KEYCAP_ONE, RED_HEART, WOMAN_RUNNING]) {
+    assert.equal(cleanText('Hello ' + emoji + ' there', options), 'Hello there', [...emoji].map((c) => c.codePointAt(0).toString(16)).join(' '))
+  }
+})
+
+test('remove emojis tidies the space an emoji leaves behind', () => {
+  const options = { removeEmojis: true }
+  assert.equal(cleanText(u(0x2705) + ' Done', options), 'Done')
+  assert.equal(cleanText('Thanks ' + THUMBS_UP_MEDIUM + '.', options), 'Thanks.')
+  assert.equal(cleanText('Launch' + u(0x1f680) + 'day', options), 'Launch day')
+  assert.equal(cleanText('Great news! ' + u(0x1f389, 0x1f389) + '\n' + GRIN + '\nNext', options), 'Great news!\n\nNext')
+})
+
+test('remove emojis leaves typographic symbols alone', () => {
+  const text = 'Copyright ' + COPYRIGHT + ' 2026 Acme' + TRADEMARK + ', A ' + LEFT_RIGHT_ARROW + ' B ' + CHECK_MARK + ', #1 of 10*'
+  assert.equal(cleanText(text, { removeEmojis: true, keepQuotes: true }), text)
+  // The same symbol written as an emoji goes.
+  assert.equal(cleanText('Acme' + COPYRIGHT + u(0xfe0f), { removeEmojis: true }), 'Acme')
+})
+
+test('default cleaning keeps emojis intact, joiners and flag tags included', () => {
+  for (const emoji of [FAMILY, SCOTLAND_FLAG, WOMAN_RUNNING, THUMBS_UP_MEDIUM, KEYCAP_ONE, RED_HEART]) {
+    assert.equal(cleanText('Hi ' + emoji), 'Hi ' + emoji)
+  }
+  // Joiners and tag characters that are not part of an emoji still go.
+  assert.equal(cleanText('a' + u(0x200d) + 'b' + u(0xe0067, 0xe007f) + 'c'), 'abc')
+})
+
+test('the summary counts emojis removed, and only when the switch is on', () => {
+  const raw = 'Party ' + u(0x1f389) + ' with the ' + FAMILY + ' ' + UK_FLAG
+  const options = { removeEmojis: true }
+  assert.deepEqual(describeChanges(raw, cleanText(raw, options), options), ['Removed 3 emojis.'])
+  assert.deepEqual(describeChanges(raw, cleanText(raw)), [])
 })
 
 // --- Tools ----------------------------------------------------------------

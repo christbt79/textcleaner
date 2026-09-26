@@ -9,7 +9,7 @@ import {
   INVISIBLE_RE, LDQUO, LIGATURES, LIGATURE_RE, LINE_SEPARATOR_RE, LSQUO,
   MOJIBAKE_HINT_RE, MOJIBAKE_PAIRS, OBJECT_REPLACEMENT_RE, PRIVATE_USE_RE,
   QUOTES, QUOTE_RE, RDQUO, RSQUO, SYMBOLS, SYMBOL_RE, TAG_CHARS_RE,
-  TRANSLITERATE_RE, TRANSLITERATIONS, emojiRegex,
+  TRANSLITERATE_RE, TRANSLITERATIONS, emojiRegex, EMOJI_PATTERN, EMOJI_GLUE_PATTERN,
 } from '../chars.js'
 
 /** CRLF, lone CR and the Unicode line/paragraph separators all become LF. */
@@ -29,8 +29,12 @@ export function normaliseUnicode(text, { form = 'NFC' } = {}) {
 
 /** Strips zero-width, bidi, variation-selector and tag characters. */
 export function removeInvisibles(text) {
-  return text.replace(INVISIBLE_RE, '').replace(TAG_CHARS_RE, '')
+  return text.replace(INVISIBLE_OR_EMOJI_GLUE_RE, (match, glue) => glue ?? '')
 }
+
+/** Matches an invisible character, or captures one that is part of an emoji. */
+const INVISIBLE_OR_EMOJI_GLUE_RE = new RegExp(
+  '(' + EMOJI_GLUE_PATTERN + ')|' + INVISIBLE_RE.source + '|' + TAG_CHARS_RE.source, 'gu')
 
 /** Strips bidirectional overrides only, leaving other invisibles in place. */
 export function removeBidi(text) {
@@ -152,9 +156,14 @@ export function transliterate(text) {
   return mapped.normalize('NFD').replace(COMBINING_RE, '').normalize('NFC')
 }
 
-/** Drops emoji and pictographs. */
+/**
+ * Drops emoji whole, skin tones, flags and keycaps included. Emoji between
+ * two words become a space, so the words do not run together.
+ */
 export function removeEmoji(text) {
-  return text.replace(emojiRegex(), '')
+  const betweenWords = new RegExp(
+    '(?<=[\\p{L}\\p{N}])' + EMOJI_PATTERN + '+(?=[\\p{L}\\p{N}])', 'gu')
+  return text.replace(betweenWords, ' ').replace(emojiRegex(), '')
 }
 
 /** Drops anything outside printable ASCII, as a last-resort hammer. */

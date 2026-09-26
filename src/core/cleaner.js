@@ -27,7 +27,7 @@ export const ALWAYS = [
   'trimLines', 'collapseBlankLines', 'fixSpaceBeforePunctuation', 'trimDocument',
 ]
 
-/** The four choices that change the shape of the text. */
+/** The switches under the box, in the order they are shown. */
 export const SWITCHES = [
   {
     id: 'joinLines',
@@ -37,7 +37,7 @@ export const SWITCHES = [
   },
   {
     id: 'removeBullets',
-    label: 'Remove bullets and numbering',
+    label: 'Remove bullets & numbering',
     hint: 'Strips bullet characters and 1. 2. 3. numbering from the start of lines.',
     ops: ['removeListMarkers'],
   },
@@ -53,6 +53,12 @@ export const SWITCHES = [
     hint: 'Puts everything on a single line, for a form field or a spreadsheet cell.',
     ops: ['dehyphenate', 'removeAllLineBreaks'],
   },
+  {
+    id: 'removeEmojis',
+    label: 'Remove emojis',
+    hint: 'Removes emojis, with their skin tones, flags and keycaps. Copyright and trademark signs, arrows and ticks stay.',
+    ops: ['removeEmoji'],
+  },
 ]
 
 export const DEFAULT_OPTIONS = Object.freeze({
@@ -60,6 +66,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   removeBullets: false,
   keepQuotes: false,
   oneLine: false,
+  removeEmojis: false,
   // Not a visible switch: turned on by the Strip HTML tool or suggestion,
   // because tags have to come out before the characters are repaired.
   stripHtml: false,
@@ -165,6 +172,7 @@ const STRUCTURE_FIXES = [
   ['pageNumbers', ['removePageNumbers'], () => 'removed page numbers'],
   ['runningHeads', ['removeRepeatedLines'], () => 'removed repeated headers'],
   ['emailQuoting', ['removeEmailQuoting'], () => 'removed reply markers'],
+  ['emoji', ['removeEmoji'], (n) => 'removed ' + plural(n, 'emoji', 'emojis')],
   ['blankRuns', ['collapseBlankLines'], () => 'removed extra blank lines'],
 ]
 
