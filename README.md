@@ -29,14 +29,15 @@ letters from PDFs such as *fi* and *fl*, curly quotes and long dashes, double
 spaces, spaces at the ends of lines and extra blank lines. The shape of the
 text is left alone: line breaks stay where they were unless you ask otherwise.
 
-### Four switches
+### Five switches
 
 | Switch | For |
 | --- | --- |
 | Join broken lines | PDFs and emails, where lines break mid-sentence. Also removes page numbers, repeated headers and `>` reply markers. |
-| Remove bullets and numbering | Lists copied from slides, Word or web pages. |
+| Remove bullets & numbering | Lists copied from slides, Word or web pages. |
 | Keep curly quotes | Text going into InDesign or Word, where typographic quotes and dashes are wanted. |
 | One line | A form field or a spreadsheet cell. |
+| Remove emojis | Text from social media, chat or marketing email. Removes whole emojis, skin tones and flags included; copyright and trademark signs, arrows and ticks stay. |
 
 Switches are remembered between visits. Turning one on or off re-cleans your
 original paste, so nothing is ever lost by trying one.
@@ -106,7 +107,7 @@ index.html            the page
 styles/app.css        the whole stylesheet
 src/core/             pure text processing, no DOM, runs under node --test
   chars.js              every special character, defined by code point
-  cleaner.js            what the app does: the always-on fixes, the four
+  cleaner.js            what the app does: the always-on fixes, the
                         switches, the tools, the summary line, suggestions
   ops/                  the individual operations, grouped by what they act on
   pipeline.js           the registry and the fixed order operations run in
